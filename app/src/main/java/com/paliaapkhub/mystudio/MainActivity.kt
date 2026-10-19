@@ -296,6 +296,7 @@ private fun FeaturePage(
                 BoxWithConstraints(Modifier.fillMaxWidth().height(370.dp).clip(RoundedCornerShape(22.dp)).background(Pale).padding(8.dp), contentAlignment = Alignment.Center) {
                     Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Photo preview", modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
                     if (cropMode) {
+                        val density = androidx.compose.ui.platform.LocalDensity.current.density
                         val cropSize = (maxWidth / cropZoom).coerceAtMost(maxHeight / cropZoom).coerceAtLeast(60.dp)
                         val leftRange = (maxWidth - cropSize).coerceAtLeast(0.dp)
                         val topRange = (maxHeight - cropSize).coerceAtLeast(0.dp)
@@ -307,8 +308,10 @@ private fun FeaturePage(
                                 .pointerInput(cropMode, maxWidth, maxHeight, cropSize) {
                                     detectDragGestures { change, dragAmount ->
                                         change.consume()
-                                        cropX = (cropX + dragAmount.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f)
-                                        cropY = (cropY + dragAmount.y / size.height.coerceAtLeast(1)).coerceIn(0f, 1f)
+                                        val moveX = ((maxWidth - cropSize).value * density).coerceAtLeast(1f)
+                                        val moveY = ((maxHeight - cropSize).value * density).coerceAtLeast(1f)
+                                        cropX = (cropX + dragAmount.x / moveX).coerceIn(0f, 1f)
+                                        cropY = (cropY + dragAmount.y / moveY).coerceIn(0f, 1f)
                                     }
                                 },
                             contentAlignment = Alignment.Center
@@ -319,6 +322,16 @@ private fun FeaturePage(
                                 drawLine(Color.White.copy(alpha = .85f), Offset(0f, size.height / 3), Offset(size.width, size.height / 3), 1.dp.toPx())
                                 drawLine(Color.White.copy(alpha = .85f), Offset(0f, size.height * 2 / 3), Offset(size.width, size.height * 2 / 3), 1.dp.toPx())
                             }
+                            Box(
+                                Modifier.align(Alignment.BottomEnd).size(36.dp).clip(RoundedCornerShape(topStart = 12.dp, bottomEnd = 2.dp))
+                                    .background(Blue).pointerInput(cropZoom) {
+                                        detectDragGestures { change, dragAmount ->
+                                            change.consume()
+                                            cropZoom = (cropZoom - dragAmount.x / 180f).coerceIn(1f, 3.5f)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) { Icon(Icons.Default.OpenInFull, "Resize crop frame", tint = Color.White, modifier = Modifier.size(20.dp)) }
                         }
                         Surface(color = Color(0xE60A214B), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.TopCenter).padding(top = 4.dp)) {
                             Text("DRAG THE FRAME • CROP PREVIEW", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
@@ -367,21 +380,14 @@ private fun FeaturePage(
                             ToolChip("Crop", Modifier.weight(1f), Icons.Default.Crop) { cropMode = !cropMode }
                         }
                         if (cropMode) {
-                            Spacer(Modifier.height(12.dp))
-                            Surface(color = Pale, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(14.dp)) {
-                                    Text("CUSTOM CROP", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
-                                    Text("Move the crop area and adjust its size.", color = Color.Gray, fontSize = 12.sp)
-                                    Text("Horizontal", color = Navy, fontSize = 12.sp)
-                                    Slider(value = cropX, onValueChange = { cropX = it }, valueRange = 0.05f..0.95f)
-                                    Text("Vertical", color = Navy, fontSize = 12.sp)
-                                    Slider(value = cropY, onValueChange = { cropY = it }, valueRange = 0.05f..0.95f)
-                                    Text("Crop size", color = Navy, fontSize = 12.sp)
-                                    Slider(value = cropZoom, onValueChange = { cropZoom = it }, valueRange = 1f..3.5f)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(onClick = { cropX = .5f; cropY = .5f; cropZoom = 1.5f; onTransform("reset") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("Reset crop") }
-                                        Button(onClick = { onTransform("crop_custom:$cropX:$cropY:$cropZoom"); cropMode = false }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("Apply crop") }
-                                    }
+                            Spacer(Modifier.height(10.dp))
+                            Text("Drag inside the frame to move it. Drag the blue corner to resize.", color = Color.Gray, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedButton(onClick = { cropX = .5f; cropY = .5f; cropZoom = 1.5f }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
+                                    Icon(Icons.Default.RestartAlt, null); Spacer(Modifier.width(6.dp)); Text("Reset")
+                                }
+                                Button(onClick = { onTransform("crop_custom:$cropX:$cropY:$cropZoom"); cropMode = false }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
+                                    Icon(Icons.Default.Check, null); Spacer(Modifier.width(6.dp)); Text("Done")
                                 }
                             }
                         }
