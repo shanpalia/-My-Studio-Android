@@ -1,6 +1,13 @@
 package com.paliaapkhub.mystudio
 
 import android.os.Bundle
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -50,6 +57,14 @@ private fun MyStudioApp() {
     var showExit by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf("Home") }
     var selectedFeature by remember { mutableStateOf<String?>(null) }
+    var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) selectedBitmap = try { context.contentResolver.openInputStream(uri)?.use { stream -> BitmapFactory.decodeStream(stream) } } catch (_: Exception) { null }
+    }
+    val cameraCapture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap: Bitmap? ->
+        if (bitmap != null) selectedBitmap = bitmap
+    }
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(1600)
@@ -66,8 +81,14 @@ private fun MyStudioApp() {
         colorScheme = lightColorScheme(primary = Blue, background = Color.White, surface = Color.White)
     ) {
         if (showSplash) SplashScreen() else {
-            Box(Modifier.fillMaxSize().background(Color.White)) {
-                if (selectedFeature != null) FeaturePage(selectedFeature!!) { selectedFeature = null }
+            Box(Modifier.fillMaxSize().background(Color.White).statusBarsPadding().navigationBarsPadding()) {
+                if (selectedFeature != null) FeaturePage(
+                    title = selectedFeature!!,
+                    bitmap = selectedBitmap,
+                    onBack = { selectedFeature = null },
+                    onChoosePhoto = { photoPicker.launch("image/*") },
+                    onOpenCamera = { cameraCapture.launch(null) }
+                )
                 else if (selectedTab == "Home") HomeScreen(
                     onFeature = { selectedFeature = it },
                     onTab = { selectedTab = it }
@@ -137,7 +158,7 @@ private fun HomeScreen(onFeature: (String) -> Unit, onTab: (String) -> Unit) {
         Triple("Frames", "Beautiful frames", Icons.Default.CropSquare)
     )
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             CameraMark(42)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
@@ -231,25 +252,60 @@ private fun AiCard(title: String, icon: androidx.compose.ui.graphics.vector.Imag
 }
 
 @Composable
-private fun FeaturePage(title: String, onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(20.dp)) {
+private fun FeaturePage(
+    title: String,
+    bitmap: Bitmap?,
+    onBack: () -> Unit,
+    onChoosePhoto: () -> Unit,
+    onOpenCamera: () -> Unit
+) {
+    val isCamera = title == "Camera"
+    val isPhotoTool = title in listOf("Edit Photo", "Filters", "Text", "Stickers", "Frames", "Collage", "AI Studio", "Remove Background", "Change Background", "AI Photo Generation")
+    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }
-            Text(title, color = Navy, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Navy) }
+            Text(title, color = Navy, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.height(30.dp))
-        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CameraMark(88)
+        Spacer(Modifier.height(16.dp))
+        if (bitmap != null) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Selected photo", modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).clip(RoundedCornerShape(18.dp)))
                 Spacer(Modifier.height(18.dp))
-                Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Navy)
-                Text("This tool is ready for the next implementation step.", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(16.dp))
-                if (title.contains("Edit") || title.contains("Background")) {
-                    Button(onClick = { /* photo picker will be wired in next step */ }) { Text("Choose Photo") }
+                Text(if (isCamera) "Photo captured" else "Photo selected", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Your photo is loaded in My Studio.", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = onChoosePhoto) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(6.dp)); Text("Change photo") }
+                    if (isCamera) Button(onClick = onOpenCamera) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(6.dp)); Text("Retake") }
+                }
+                if (!isCamera) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Photo preview is working. Editing tools will be added in the next feature update.", color = Color.Gray, textAlign = TextAlign.Center, fontSize = 13.sp)
+                }
+            }
+        } else {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CameraMark(88)
+                    Spacer(Modifier.height(18.dp))
+                    Text(title, fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Navy)
+                    Text(if (isCamera) "Take a photo using your phone camera." else "Choose a photo from your phone to get started.", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
+                    if (isCamera) {
+                        Button(onClick = onOpenCamera, shape = CircleShape) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(8.dp)); Text("Open Camera") }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(onClick = onChoosePhoto) { Text("Choose from Gallery") }
+                    } else if (isPhotoTool) {
+                        Button(onClick = onChoosePhoto, shape = CircleShape) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(8.dp)); Text("Choose Photo") }
+                        if (title == "Edit Photo") {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(onClick = onOpenCamera) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(8.dp)); Text("Take a Photo") }
+                        }
+                    } else {
+                        Text("This section is being prepared.", color = Color.Gray, textAlign = TextAlign.Center)
+                    }
                 }
             }
         }
-        Text("PaliaAPK HUB  •  Developer by shanpalia", color = Color.Gray, modifier = Modifier.align(Alignment.CenterHorizontally), fontSize = 11.sp)
+        Text("PaliaAPK HUB  •  Developer by shanpalia", color = Color(0xFF9AA6B6), modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), fontSize = 11.sp, textAlign = TextAlign.Center)
     }
 }
 
