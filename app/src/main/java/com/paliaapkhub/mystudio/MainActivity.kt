@@ -3,6 +3,13 @@ package com.paliaapkhub.mystudio
 import android.os.Bundle
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Color as AndroidColor
+import android.content.ContentValues
+import android.provider.MediaStore
+import android.widget.Toast
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,12 +65,13 @@ private fun MyStudioApp() {
     var selectedTab by remember { mutableStateOf("Home") }
     var selectedFeature by remember { mutableStateOf<String?>(null) }
     var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var originalBitmap by remember { mutableStateOf<Bitmap?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri != null) selectedBitmap = try { context.contentResolver.openInputStream(uri)?.use { stream -> BitmapFactory.decodeStream(stream) } } catch (_: Exception) { null }
+        if (uri != null) { val loaded = try { context.contentResolver.openInputStream(uri)?.use { stream -> BitmapFactory.decodeStream(stream) } } catch (_: Exception) { null }; selectedBitmap = loaded; originalBitmap = loaded }
     }
     val cameraCapture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap: Bitmap? ->
-        if (bitmap != null) selectedBitmap = bitmap
+        if (bitmap != null) { selectedBitmap = bitmap; originalBitmap = bitmap }
     }
 
     LaunchedEffect(Unit) {
@@ -87,7 +95,9 @@ private fun MyStudioApp() {
                     bitmap = selectedBitmap,
                     onBack = { selectedFeature = null },
                     onChoosePhoto = { photoPicker.launch("image/*") },
-                    onOpenCamera = { cameraCapture.launch(null) }
+                    onOpenCamera = { cameraCapture.launch(null) },
+                    onTransform = { action -> selectedBitmap = selectedBitmap?.let { transformBitmap(it, action) } ?: selectedBitmap },
+                    onSave = { selectedBitmap?.let { saveBitmap(context, it) } }
                 )
                 else if (selectedTab == "Home") HomeScreen(
                     onFeature = { selectedFeature = it },
@@ -257,7 +267,9 @@ private fun FeaturePage(
     bitmap: Bitmap?,
     onBack: () -> Unit,
     onChoosePhoto: () -> Unit,
-    onOpenCamera: () -> Unit
+    onOpenCamera: () -> Unit,
+    onTransform: (String) -> Unit,
+    onSave: () -> Unit
 ) {
     val isCamera = title == "Camera"
     val isPhotoTool = title in listOf("Edit Photo", "Filters", "Text", "Stickers", "Frames", "Collage", "AI Studio", "Remove Background", "Change Background", "AI Photo Generation")
@@ -266,21 +278,50 @@ private fun FeaturePage(
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Navy) }
             Text(title, color = Navy, fontSize = 25.sp, fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
         if (bitmap != null) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Selected photo", modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).clip(RoundedCornerShape(18.dp)))
-                Spacer(Modifier.height(18.dp))
-                Text(if (isCamera) "Photo captured" else "Photo selected", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("Your photo is loaded in My Studio.", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = onChoosePhoto) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(6.dp)); Text("Change photo") }
-                    if (isCamera) Button(onClick = onOpenCamera) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(6.dp)); Text("Retake") }
+                Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Photo preview", modifier = Modifier.fillMaxWidth().heightIn(max = 410.dp).clip(RoundedCornerShape(18.dp)))
+                Spacer(Modifier.height(12.dp))
+                Text("Photo ready to edit", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onChoosePhoto) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(5.dp)); Text("Change") }
+                    Button(onClick = onSave) { Icon(Icons.Default.SaveAlt, null); Spacer(Modifier.width(5.dp)); Text("Save") }
                 }
-                if (!isCamera) {
-                    Spacer(Modifier.height(8.dp))
-                    Text("Photo preview is working. Editing tools will be added in the next feature update.", color = Color.Gray, textAlign = TextAlign.Center, fontSize = 13.sp)
+                if (title in listOf("Edit Photo", "Filters", "Frames", "Text", "Stickers", "Collage", "AI Studio")) {
+                    Text("Editing tools", color = Navy, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 6.dp))
+                    when (title) {
+                        "Filters" -> {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf("Original", "B&W", "Sepia", "Bright").forEach { label ->
+                                    OutlinedButton(onClick = { onTransform(when(label) { "B&W" -> "grayscale"; "Sepia" -> "sepia"; "Bright" -> "bright"; else -> "reset" }) }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) { Text(label, fontSize = 12.sp) }
+                                }
+                            }
+                        }
+                        "Frames" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { onTransform("frame") }) { Text("Add white frame") }
+                            OutlinedButton(onClick = { onTransform("reset") }) { Text("Reset") }
+                        }
+                        "Text" -> {
+                            var caption by remember { mutableStateOf("My Studio") }
+                            OutlinedTextField(value = caption, onValueChange = { caption = it }, label = { Text("Caption text") }, singleLine = true)
+                            Button(onClick = { onTransform("text:$caption") }) { Text("Add caption") }
+                        }
+                        "Stickers" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("♥", "★", "✨").forEach { sticker -> OutlinedButton(onClick = { onTransform("text:$sticker") }) { Text(sticker) } }
+                        }
+                        "Collage" -> Text("Basic collage needs a second photo; select another image in the next update.", color = Color.Gray, fontSize = 12.sp)
+                        else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { onTransform("rotate") }) { Icon(Icons.Default.RotateRight, null); Text("Rotate") }
+                            OutlinedButton(onClick = { onTransform("flip") }) { Icon(Icons.Default.Flip, null); Text("Flip") }
+                            OutlinedButton(onClick = { onTransform("crop") }) { Icon(Icons.Default.Crop, null); Text("Square crop") }
+                            OutlinedButton(onClick = { onTransform("reset") }) { Text("Reset") }
+                        }
+                    }
+                } else if (isCamera) {
+                    OutlinedButton(onClick = onOpenCamera) { Icon(Icons.Default.PhotoCamera, null); Text("Retake") }
                 }
+                Spacer(Modifier.height(12.dp))
             }
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -299,14 +340,69 @@ private fun FeaturePage(
                             Spacer(Modifier.height(8.dp))
                             OutlinedButton(onClick = onOpenCamera) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(8.dp)); Text("Take a Photo") }
                         }
-                    } else {
-                        Text("This section is being prepared.", color = Color.Gray, textAlign = TextAlign.Center)
-                    }
+                    } else Text("This section is being prepared.", color = Color.Gray, textAlign = TextAlign.Center)
                 }
             }
         }
-        Text("PaliaAPK HUB  •  Developer by shanpalia", color = Color(0xFF9AA6B6), modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), fontSize = 11.sp, textAlign = TextAlign.Center)
+        Text("PaliaAPK HUB  •  Developer by shanpalia", color = Color(0xFF9AA6B6), modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp), fontSize = 11.sp, textAlign = TextAlign.Center)
     }
+}
+
+private fun transformBitmap(source: Bitmap, action: String): Bitmap {
+    if (action == "reset") return source
+    if (action == "rotate" || action == "flip") {
+        val matrix = Matrix()
+        if (action == "rotate") matrix.postRotate(90f) else matrix.postScale(-1f, 1f)
+        return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+    }
+    if (action == "crop") {
+        val side = minOf(source.width, source.height)
+        return Bitmap.createBitmap(source, (source.width-side)/2, (source.height-side)/2, side, side)
+    }
+    val output = source.copy(Bitmap.Config.ARGB_8888, true)
+    val canvas = Canvas(output)
+    if (action == "frame") {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; style = Paint.Style.STROKE; strokeWidth = maxOf(12f, output.width * .025f) }
+        canvas.drawRect(paint.strokeWidth/2, paint.strokeWidth/2, output.width-paint.strokeWidth/2, output.height-paint.strokeWidth/2, paint)
+        return output
+    }
+    if (action.startsWith("text:")) {
+        val caption = action.removePrefix("text:")
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; textSize = maxOf(36f, output.width * .07f); typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD); setShadowLayer(4f, 2f, 2f, AndroidColor.BLACK) }
+        canvas.drawText(caption, output.width * .05f, output.height * .92f, paint)
+        return output
+    }
+    val pixels = IntArray(output.width * output.height)
+    output.getPixels(pixels, 0, output.width, 0, 0, output.width, output.height)
+    for (i in pixels.indices) {
+        val color = pixels[i]
+        val a = AndroidColor.alpha(color); val r = AndroidColor.red(color).toFloat(); val g = AndroidColor.green(color).toFloat(); val b = AndroidColor.blue(color).toFloat()
+        val nr: Int; val ng: Int; val nb: Int
+        when (action) {
+            "grayscale" -> { val y = (.299f*r + .587f*g + .114f*b).toInt(); nr=y; ng=y; nb=y }
+            "sepia" -> { nr=(.393f*r+.769f*g+.189f*b).toInt().coerceAtMost(255); ng=(.349f*r+.686f*g+.168f*b).toInt().coerceAtMost(255); nb=(.272f*r+.534f*g+.131f*b).toInt().coerceAtMost(255) }
+            "bright" -> { nr=(r*1.12f+12).toInt().coerceAtMost(255); ng=(g*1.12f+12).toInt().coerceAtMost(255); nb=(b*1.12f+12).toInt().coerceAtMost(255) }
+            else -> { nr=r.toInt(); ng=g.toInt(); nb=b.toInt() }
+        }
+        pixels[i] = AndroidColor.argb(a, nr, ng, nb)
+    }
+    output.setPixels(pixels, 0, output.width, 0, 0, output.width, output.height)
+    return output
+}
+
+private fun saveBitmap(context: android.content.Context, bitmap: Bitmap) {
+    try {
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "MyStudio_${System.currentTimeMillis()}.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MyStudio")
+        }
+        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        if (uri != null) {
+            context.contentResolver.openOutputStream(uri)?.use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+            Toast.makeText(context, "Saved to Pictures/MyStudio", Toast.LENGTH_LONG).show()
+        } else Toast.makeText(context, "Could not save photo", Toast.LENGTH_SHORT).show()
+    } catch (_: Exception) { Toast.makeText(context, "Could not save photo", Toast.LENGTH_SHORT).show() }
 }
 
 @Composable
