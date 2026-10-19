@@ -21,6 +21,9 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -289,10 +292,36 @@ private fun FeaturePage(
         Spacer(Modifier.height(8.dp))
         if (bitmap != null) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 390.dp).clip(RoundedCornerShape(22.dp)).background(Pale).padding(8.dp), contentAlignment = Alignment.Center) {
-                    Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Photo preview", modifier = Modifier.fillMaxWidth().heightIn(max = 370.dp).clip(RoundedCornerShape(16.dp)))
-                    if (cropMode) Surface(color = Color(0xCC0A214B), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.TopCenter).padding(8.dp)) {
-                        Text("Adjust crop below", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                BoxWithConstraints(Modifier.fillMaxWidth().height(370.dp).clip(RoundedCornerShape(22.dp)).background(Pale).padding(8.dp), contentAlignment = Alignment.Center) {
+                    Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Photo preview", modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+                    if (cropMode) {
+                        val cropSize = (maxWidth / cropZoom).coerceAtMost(maxHeight / cropZoom).coerceAtLeast(60.dp)
+                        val leftRange = (maxWidth - cropSize).coerceAtLeast(0.dp)
+                        val topRange = (maxHeight - cropSize).coerceAtLeast(0.dp)
+                        Box(
+                            Modifier.offset(x = leftRange * cropX, y = topRange * cropY)
+                                .size(cropSize)
+                                .border(2.dp, Color.White, RoundedCornerShape(2.dp))
+                                .background(Color(0x183D8BFF))
+                                .pointerInput(cropMode, maxWidth, maxHeight, cropSize) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        cropX = (cropX + dragAmount.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f)
+                                        cropY = (cropY + dragAmount.y / size.height.coerceAtLeast(1)).coerceIn(0f, 1f)
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                                drawLine(Color.White.copy(alpha = .85f), Offset(size.width / 3, 0f), Offset(size.width / 3, size.height), 1.dp.toPx())
+                                drawLine(Color.White.copy(alpha = .85f), Offset(size.width * 2 / 3, 0f), Offset(size.width * 2 / 3, size.height), 1.dp.toPx())
+                                drawLine(Color.White.copy(alpha = .85f), Offset(0f, size.height / 3), Offset(size.width, size.height / 3), 1.dp.toPx())
+                                drawLine(Color.White.copy(alpha = .85f), Offset(0f, size.height * 2 / 3), Offset(size.width, size.height * 2 / 3), 1.dp.toPx())
+                            }
+                        }
+                        Surface(color = Color(0xE60A214B), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.TopCenter).padding(top = 4.dp)) {
+                            Text("DRAG THE FRAME • CROP PREVIEW", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                        }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
