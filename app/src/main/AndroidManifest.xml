@@ -2,8 +2,8 @@
     <application
         android:allowBackup="true"
         android:label="My Studio"
-        android:icon="@drawable/ic_mystudio"
-        android:roundIcon="@drawable/ic_mystudio"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyStudio">
         <activity
