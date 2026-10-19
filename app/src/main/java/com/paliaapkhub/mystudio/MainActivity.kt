@@ -96,7 +96,7 @@ private fun MyStudioApp() {
                     onBack = { selectedFeature = null },
                     onChoosePhoto = { photoPicker.launch("image/*") },
                     onOpenCamera = { cameraCapture.launch(null) },
-                    onTransform = { action -> selectedBitmap = selectedBitmap?.let { transformBitmap(it, action) } ?: selectedBitmap },
+                    onTransform = { action -> selectedBitmap = if (action == "reset") originalBitmap else selectedBitmap?.let { transformBitmap(it, action) } },
                     onSave = { selectedBitmap?.let { saveBitmap(context, it) } }
                 )
                 else if (selectedTab == "Home") HomeScreen(
