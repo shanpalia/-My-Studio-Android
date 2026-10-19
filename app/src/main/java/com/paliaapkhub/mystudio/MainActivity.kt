@@ -25,6 +25,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -280,7 +281,9 @@ private fun FeaturePage(
     var cropMode by remember { mutableStateOf(false) }
     var cropX by remember { mutableFloatStateOf(0.5f) }
     var cropY by remember { mutableFloatStateOf(0.5f) }
-    var cropZoom by remember { mutableFloatStateOf(1.5f) }
+    var cropZoom by remember { mutableFloatStateOf(1.0f) }
+    var cropW by remember { mutableFloatStateOf(0.82f) }
+    var cropH by remember { mutableFloatStateOf(0.82f) }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Navy) }
@@ -294,47 +297,51 @@ private fun FeaturePage(
         if (bitmap != null) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
                 BoxWithConstraints(Modifier.fillMaxWidth().height(370.dp).clip(RoundedCornerShape(22.dp)).background(Pale).padding(8.dp), contentAlignment = Alignment.Center) {
-                    Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Photo preview", modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
-                    if (cropMode) {
-                        val density = androidx.compose.ui.platform.LocalDensity.current.density
-                        val cropSize = (maxWidth / cropZoom).coerceAtMost(maxHeight / cropZoom).coerceAtLeast(60.dp)
-                        val leftRange = (maxWidth - cropSize).coerceAtLeast(0.dp)
-                        val topRange = (maxHeight - cropSize).coerceAtLeast(0.dp)
-                        Box(
-                            Modifier.offset(x = leftRange * cropX, y = topRange * cropY)
-                                .size(cropSize)
-                                .border(2.dp, Color.White, RoundedCornerShape(2.dp))
-                                .background(Color(0x183D8BFF))
-                                .pointerInput(cropMode, maxWidth, maxHeight, cropSize) {
-                                    detectDragGestures { change, dragAmount ->
-                                        change.consume()
-                                        val moveX = ((maxWidth - cropSize).value * density).coerceAtLeast(1f)
-                                        val moveY = ((maxHeight - cropSize).value * density).coerceAtLeast(1f)
-                                        cropX = (cropX + dragAmount.x / moveX).coerceIn(0f, 1f)
-                                        cropY = (cropY + dragAmount.y / moveY).coerceIn(0f, 1f)
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                                drawLine(Color.White.copy(alpha = .85f), Offset(size.width / 3, 0f), Offset(size.width / 3, size.height), 1.dp.toPx())
-                                drawLine(Color.White.copy(alpha = .85f), Offset(size.width * 2 / 3, 0f), Offset(size.width * 2 / 3, size.height), 1.dp.toPx())
-                                drawLine(Color.White.copy(alpha = .85f), Offset(0f, size.height / 3), Offset(size.width, size.height / 3), 1.dp.toPx())
-                                drawLine(Color.White.copy(alpha = .85f), Offset(0f, size.height * 2 / 3), Offset(size.width, size.height * 2 / 3), 1.dp.toPx())
-                            }
+                    val imageRatio = bitmap.width.toFloat() / bitmap.height.toFloat()
+                    val boxRatio = maxWidth / maxHeight
+                    val imageWidth = if (imageRatio > boxRatio) maxWidth else maxHeight * imageRatio
+                    val imageHeight = if (imageRatio > boxRatio) maxWidth / imageRatio else maxHeight
+                    val density = LocalDensity.current.density
+                    Box(Modifier.width(imageWidth).height(imageHeight).align(Alignment.Center)) {
+                        Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Photo preview", modifier = Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.FillBounds)
+                        if (cropMode) {
+                            val frameW = (imageWidth * cropW).coerceAtLeast(48.dp)
+                            val frameH = (imageHeight * cropH).coerceAtLeast(48.dp)
+                            val maxX = (imageWidth - frameW).coerceAtLeast(0.dp)
+                            val maxY = (imageHeight - frameH).coerceAtLeast(0.dp)
                             Box(
-                                Modifier.align(Alignment.BottomEnd).size(36.dp).clip(RoundedCornerShape(topStart = 12.dp, bottomEnd = 2.dp))
-                                    .background(Blue).pointerInput(cropZoom) {
+                                Modifier.offset(x = maxX * cropX, y = maxY * cropY)
+                                    .width(frameW).height(frameH)
+                                    .border(2.dp, Color.White, RoundedCornerShape(2.dp))
+                                    .background(Color(0x183D8BFF))
+                                    .pointerInput(cropMode, imageWidth, imageHeight, frameW, frameH) {
                                         detectDragGestures { change, dragAmount ->
                                             change.consume()
-                                            cropZoom = (cropZoom - dragAmount.x / 180f).coerceIn(1f, 3.5f)
+                                            val rangeX = ((imageWidth - frameW).value * density).coerceAtLeast(1f)
+                                            val rangeY = ((imageHeight - frameH).value * density).coerceAtLeast(1f)
+                                            cropX = (cropX + dragAmount.x / rangeX).coerceIn(0f, 1f)
+                                            cropY = (cropY + dragAmount.y / rangeY).coerceIn(0f, 1f)
                                         }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) { Icon(Icons.Default.OpenInFull, "Resize crop frame", tint = Color.White, modifier = Modifier.size(20.dp)) }
-                        }
-                        Surface(color = Color(0xE60A214B), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.TopCenter).padding(top = 4.dp)) {
-                            Text("DRAG THE FRAME • CROP PREVIEW", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                                    }
+                            ) {
+                                androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                                    val line = 1.dp.toPx()
+                                    drawLine(Color.White.copy(alpha = .9f), Offset(size.width / 3, 0f), Offset(size.width / 3, size.height), line)
+                                    drawLine(Color.White.copy(alpha = .9f), Offset(size.width * 2 / 3, 0f), Offset(size.width * 2 / 3, size.height), line)
+                                    drawLine(Color.White.copy(alpha = .9f), Offset(0f, size.height / 3), Offset(size.width, size.height / 3), line)
+                                    drawLine(Color.White.copy(alpha = .9f), Offset(0f, size.height * 2 / 3), Offset(size.width, size.height * 2 / 3), line)
+                                }
+                                Box(Modifier.align(Alignment.BottomEnd).size(34.dp).background(Blue, RoundedCornerShape(topStart = 10.dp))
+                                    .pointerInput(cropW, cropH, imageWidth, imageHeight) {
+                                        detectDragGestures { change, dragAmount ->
+                                            change.consume()
+                                            cropW = (cropW + dragAmount.x / (imageWidth.value * density)).coerceIn(.18f, 1f)
+                                            cropH = (cropH + dragAmount.y / (imageHeight.value * density)).coerceIn(.18f, 1f)
+                                        }
+                                    }, contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.OpenInFull, "Resize crop", tint = Color.White, modifier = Modifier.size(19.dp))
+                                }
+                            }
                         }
                     }
                 }
@@ -381,12 +388,12 @@ private fun FeaturePage(
                         }
                         if (cropMode) {
                             Spacer(Modifier.height(10.dp))
-                            Text("Drag inside the frame to move it. Drag the blue corner to resize.", color = Color.Gray, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                OutlinedButton(onClick = { cropX = .5f; cropY = .5f; cropZoom = 1.5f }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
+                            Text("Drag the frame to move it; drag the corner to resize.", color = Color.Gray, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedButton(onClick = { cropX = .08f; cropY = .08f; cropW = .82f; cropH = .82f }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
                                     Icon(Icons.Default.RestartAlt, null); Spacer(Modifier.width(6.dp)); Text("Reset")
                                 }
-                                Button(onClick = { onTransform("crop_custom:$cropX:$cropY:$cropZoom"); cropMode = false }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
+                                Button(onClick = { onTransform("crop_custom:$cropX:$cropY:$cropW:$cropH"); cropMode = false }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
                                     Icon(Icons.Default.Check, null); Spacer(Modifier.width(6.dp)); Text("Done")
                                 }
                             }
@@ -430,13 +437,15 @@ private fun transformBitmap(source: Bitmap, action: String): Bitmap {
     if (action == "reset") return source
     if (action.startsWith("crop_custom:")) {
         val args = action.removePrefix("crop_custom:").split(":")
-        val cx = args.getOrNull(0)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: .5f
-        val cy = args.getOrNull(1)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: .5f
-        val zoom = args.getOrNull(2)?.toFloatOrNull()?.coerceIn(1f, 3.5f) ?: 1.5f
-        val side = (minOf(source.width, source.height) / zoom).toInt().coerceAtLeast(1)
-        val left = ((source.width - side) * cx).toInt().coerceIn(0, source.width - side)
-        val top = ((source.height - side) * cy).toInt().coerceIn(0, source.height - side)
-        return Bitmap.createBitmap(source, left, top, side, side)
+        val cx = args.getOrNull(0)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: .08f
+        val cy = args.getOrNull(1)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: .08f
+        val wf = args.getOrNull(2)?.toFloatOrNull()?.coerceIn(.05f, 1f) ?: .82f
+        val hf = args.getOrNull(3)?.toFloatOrNull()?.coerceIn(.05f, 1f) ?: .82f
+        val cw = (source.width * wf).toInt().coerceIn(1, source.width)
+        val ch = (source.height * hf).toInt().coerceIn(1, source.height)
+        val left = ((source.width - cw) * cx).toInt().coerceIn(0, source.width - cw)
+        val top = ((source.height - ch) * cy).toInt().coerceIn(0, source.height - ch)
+        return Bitmap.createBitmap(source, left, top, cw, ch)
     }
     if (action == "rotate" || action == "flip") {
         val matrix = Matrix()
