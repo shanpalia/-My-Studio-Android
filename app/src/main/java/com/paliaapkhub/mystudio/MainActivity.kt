@@ -273,55 +273,94 @@ private fun FeaturePage(
 ) {
     val isCamera = title == "Camera"
     val isPhotoTool = title in listOf("Edit Photo", "Filters", "Text", "Stickers", "Frames", "Collage", "AI Studio", "Remove Background", "Change Background", "AI Photo Generation")
-    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    var cropMode by remember { mutableStateOf(false) }
+    var cropX by remember { mutableFloatStateOf(0.5f) }
+    var cropY by remember { mutableFloatStateOf(0.5f) }
+    var cropZoom by remember { mutableFloatStateOf(1.5f) }
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Navy) }
-            Text(title, color = Navy, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Navy, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                Text("PALIAAPK HUB  •  PHOTO STUDIO", color = Blue, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+            }
+            if (bitmap != null) IconButton(onClick = { onTransform("reset"); cropMode = false }) { Icon(Icons.Default.RestartAlt, "Reset photo", tint = Blue) }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         if (bitmap != null) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Photo preview", modifier = Modifier.fillMaxWidth().heightIn(max = 410.dp).clip(RoundedCornerShape(18.dp)))
+                Box(Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 390.dp).clip(RoundedCornerShape(22.dp)).background(Pale).padding(8.dp), contentAlignment = Alignment.Center) {
+                    Image(bitmap = bitmap.asImageBitmap(), contentDescription = "Photo preview", modifier = Modifier.fillMaxWidth().heightIn(max = 370.dp).clip(RoundedCornerShape(16.dp)))
+                    if (cropMode) Surface(color = Color(0xCC0A214B), shape = RoundedCornerShape(50), modifier = Modifier.align(Alignment.TopCenter).padding(8.dp)) {
+                        Text("Adjust crop below", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
-                Text("Photo ready to edit", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onChoosePhoto) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(5.dp)); Text("Change") }
-                    Button(onClick = onSave) { Icon(Icons.Default.SaveAlt, null); Spacer(Modifier.width(5.dp)); Text("Save") }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = onChoosePhoto, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp)) {
+                        Icon(Icons.Default.Image, null); Spacer(Modifier.width(6.dp)); Text("Change", maxLines = 1)
+                    }
+                    Button(onClick = onSave, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp)) {
+                        Icon(Icons.Default.SaveAlt, null); Spacer(Modifier.width(6.dp)); Text("Save photo", maxLines = 1)
+                    }
                 }
                 if (title in listOf("Edit Photo", "Filters", "Frames", "Text", "Stickers", "Collage", "AI Studio")) {
-                    Text("Editing tools", color = Navy, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 6.dp))
-                    when (title) {
-                        "Filters" -> {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf("Original", "B&W", "Sepia", "Bright").forEach { label ->
-                                    OutlinedButton(onClick = { onTransform(when(label) { "B&W" -> "grayscale"; "Sepia" -> "sepia"; "Bright" -> "bright"; else -> "reset" }) }, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)) { Text(label, fontSize = 12.sp) }
+                    Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("PHOTO TOOLS", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text("RESET", color = Blue, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onTransform("reset"); cropMode = false }.padding(8.dp))
+                    }
+                    if (title == "Filters") {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            listOf("Original" to "reset", "B&W" to "grayscale", "Sepia" to "sepia", "Bright" to "bright").forEach { (label, action) -> ToolChip(label, Modifier.weight(1f)) { onTransform(action) } }
+                        }
+                    } else if (title == "Frames") {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ToolChip("White frame", Modifier.weight(1f)) { onTransform("frame") }
+                            ToolChip("Reset frame", Modifier.weight(1f)) { onTransform("reset") }
+                        }
+                    } else if (title == "Text") {
+                        var caption by remember { mutableStateOf("My Studio") }
+                        OutlinedTextField(value = caption, onValueChange = { caption = it }, label = { Text("Your caption") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        Button(onClick = { onTransform("text:$caption") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Icon(Icons.Default.TextFields, null); Spacer(Modifier.width(8.dp)); Text("Add text to photo") }
+                    } else if (title == "Stickers") {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("♥", "★", "✨").forEach { sticker -> ToolChip(sticker, Modifier.weight(1f)) { onTransform("text:$sticker") } }
+                        }
+                    } else if (title == "Collage") {
+                        Surface(color = Pale, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                            Text("Choose another photo to build a collage. Multi-photo layout is coming in a later update.", color = Navy, fontSize = 13.sp, modifier = Modifier.padding(14.dp))
+                        }
+                    } else {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            ToolChip("Rotate", Modifier.weight(1f), Icons.Default.RotateRight) { onTransform("rotate") }
+                            ToolChip("Flip", Modifier.weight(1f), Icons.Default.Flip) { onTransform("flip") }
+                            ToolChip("Crop", Modifier.weight(1f), Icons.Default.Crop) { cropMode = !cropMode }
+                        }
+                        if (cropMode) {
+                            Spacer(Modifier.height(12.dp))
+                            Surface(color = Pale, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(14.dp)) {
+                                    Text("CUSTOM CROP", color = Navy, fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+                                    Text("Move the crop area and adjust its size.", color = Color.Gray, fontSize = 12.sp)
+                                    Text("Horizontal", color = Navy, fontSize = 12.sp)
+                                    Slider(value = cropX, onValueChange = { cropX = it }, valueRange = 0.05f..0.95f)
+                                    Text("Vertical", color = Navy, fontSize = 12.sp)
+                                    Slider(value = cropY, onValueChange = { cropY = it }, valueRange = 0.05f..0.95f)
+                                    Text("Crop size", color = Navy, fontSize = 12.sp)
+                                    Slider(value = cropZoom, onValueChange = { cropZoom = it }, valueRange = 1f..3.5f)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(onClick = { cropX = .5f; cropY = .5f; cropZoom = 1.5f; onTransform("reset") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("Reset crop") }
+                                        Button(onClick = { onTransform("crop_custom:$cropX:$cropY:$cropZoom"); cropMode = false }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("Apply crop") }
+                                    }
                                 }
                             }
                         }
-                        "Frames" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { onTransform("frame") }) { Text("Add white frame") }
-                            OutlinedButton(onClick = { onTransform("reset") }) { Text("Reset") }
-                        }
-                        "Text" -> {
-                            var caption by remember { mutableStateOf("My Studio") }
-                            OutlinedTextField(value = caption, onValueChange = { caption = it }, label = { Text("Caption text") }, singleLine = true)
-                            Button(onClick = { onTransform("text:$caption") }) { Text("Add caption") }
-                        }
-                        "Stickers" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("♥", "★", "✨").forEach { sticker -> OutlinedButton(onClick = { onTransform("text:$sticker") }) { Text(sticker) } }
-                        }
-                        "Collage" -> Text("Basic collage needs a second photo; select another image in the next update.", color = Color.Gray, fontSize = 12.sp)
-                        else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { onTransform("rotate") }) { Icon(Icons.Default.RotateRight, null); Text("Rotate") }
-                            OutlinedButton(onClick = { onTransform("flip") }) { Icon(Icons.Default.Flip, null); Text("Flip") }
-                            OutlinedButton(onClick = { onTransform("crop") }) { Icon(Icons.Default.Crop, null); Text("Square crop") }
-                            OutlinedButton(onClick = { onTransform("reset") }) { Text("Reset") }
-                        }
                     }
                 } else if (isCamera) {
-                    OutlinedButton(onClick = onOpenCamera) { Icon(Icons.Default.PhotoCamera, null); Text("Retake") }
+                    OutlinedButton(onClick = onOpenCamera, shape = RoundedCornerShape(14.dp)) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(8.dp)); Text("Retake photo") }
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(18.dp))
+                Text("Made with My Studio", color = Color(0xFF8A9BB5), fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 10.dp))
             }
         } else {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -329,27 +368,40 @@ private fun FeaturePage(
                     CameraMark(88)
                     Spacer(Modifier.height(18.dp))
                     Text(title, fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Navy)
-                    Text(if (isCamera) "Take a photo using your phone camera." else "Choose a photo from your phone to get started.", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
+                    Text(if (isCamera) "Capture a new photo with your phone camera." else "Pick a photo to start creating.", color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
                     if (isCamera) {
-                        Button(onClick = onOpenCamera, shape = CircleShape) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(8.dp)); Text("Open Camera") }
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = onChoosePhoto) { Text("Choose from Gallery") }
+                        Button(onClick = onOpenCamera, shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(8.dp)); Text("Open Camera") }
+                        OutlinedButton(onClick = onChoosePhoto, shape = RoundedCornerShape(16.dp)) { Text("Choose from Gallery") }
                     } else if (isPhotoTool) {
-                        Button(onClick = onChoosePhoto, shape = CircleShape) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(8.dp)); Text("Choose Photo") }
-                        if (title == "Edit Photo") {
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = onOpenCamera) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(8.dp)); Text("Take a Photo") }
-                        }
+                        Button(onClick = onChoosePhoto, shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.Image, null); Spacer(Modifier.width(8.dp)); Text("Choose Photo") }
+                        if (title == "Edit Photo") OutlinedButton(onClick = onOpenCamera, shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(8.dp)); Text("Take a Photo") }
                     } else Text("This section is being prepared.", color = Color.Gray, textAlign = TextAlign.Center)
                 }
             }
         }
-        Text("PaliaAPK HUB  •  Developer by shanpalia", color = Color(0xFF9AA6B6), modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp), fontSize = 11.sp, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun ToolChip(label: String, modifier: Modifier = Modifier, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 5.dp, vertical = 8.dp)) {
+        if (icon != null) { Icon(icon, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)) }
+        Text(label, maxLines = 1, fontSize = 12.sp)
     }
 }
 
 private fun transformBitmap(source: Bitmap, action: String): Bitmap {
     if (action == "reset") return source
+    if (action.startsWith("crop_custom:")) {
+        val args = action.removePrefix("crop_custom:").split(":")
+        val cx = args.getOrNull(0)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: .5f
+        val cy = args.getOrNull(1)?.toFloatOrNull()?.coerceIn(0f, 1f) ?: .5f
+        val zoom = args.getOrNull(2)?.toFloatOrNull()?.coerceIn(1f, 3.5f) ?: 1.5f
+        val side = (minOf(source.width, source.height) / zoom).toInt().coerceAtLeast(1)
+        val left = ((source.width - side) * cx).toInt().coerceIn(0, source.width - side)
+        val top = ((source.height - side) * cy).toInt().coerceIn(0, source.height - side)
+        return Bitmap.createBitmap(source, left, top, side, side)
+    }
     if (action == "rotate" || action == "flip") {
         val matrix = Matrix()
         if (action == "rotate") matrix.postRotate(90f) else matrix.postScale(-1f, 1f)
